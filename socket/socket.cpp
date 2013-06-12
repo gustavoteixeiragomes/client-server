@@ -30,8 +30,8 @@
 
    1.1	Gustavo Gomes - socket.class@guvux.com.br														2013-06-12
 
-   * [Socket::ReceiveBytes]			transfers the flow control to the requester
-   * [SocketClient::SocketClient]	also accepts ip adresses now
+   * [Socket::ReceiveBytes]			Transfers the flow control to the requester
+   * [SocketClient::SocketClient]	Modify to accepts ip adresses
 
 */
 
