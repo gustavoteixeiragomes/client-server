@@ -30,13 +30,23 @@
 
    1.1	Gustavo Gomes - socket.class@guvux.com.br														2013-06-12
 
-   * [Socket::ReceiveBytes]			Transfers the flow control to the requester
-   * [SocketClient::SocketClient]	Modify to accepts ip adresses
+   * [General]							Impleented the namespace
+   * [SocketInterface::ReceiveBytes]	Transfers the flow control to the requester
+   * [SocketClient::SocketClient]		Modify to accepts ip adresses
+   * [SocketServer::getSocket]			Implemented to return the socket and enable the verification of incoming data on the server
+   removed Socket::Select, Socket::Select::Readable
+   modify SocketServer add SocketServer::Create
 
 */
+//#define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
+//#define _CRT_SECURE_NO_WARNINGS
 
-#define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
-#define _CRT_SECURE_NO_WARNINGS
+#ifndef WIN32_LEAN_AND_MEAN
+	#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef _CRT_SECURE_NO_WARNINGS
+	#define _CRT_SECURE_NO_WARNINGS 1
+#endif
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -49,9 +59,10 @@
 
 using namespace std;
 
-int Socket::nofSockets_= 0;
+int SocketInterface::Socket::nofSockets_= 0;
 
-void Socket::Start() {
+void SocketInterface::Socket::Start() {
+	cout << "Start socket" << endl;
   if (!nofSockets_) {
     WSADATA info;
     if (WSAStartup(MAKEWORD(2,1), &info)) {
@@ -61,11 +72,11 @@ void Socket::Start() {
   ++nofSockets_;
 }
 
-void Socket::End() {
+void SocketInterface::Socket::End() {
   WSACleanup();
 }
 
-Socket::Socket() : s_(0) {
+SocketInterface::Socket::Socket() : s_(0) {
   Start();
   // UDP: use SOCK_DGRAM instead of SOCK_STREAM
   s_ = socket(AF_INET,SOCK_STREAM,0);
@@ -77,12 +88,12 @@ Socket::Socket() : s_(0) {
   refCounter_ = new int(1);
 }
 
-Socket::Socket(SOCKET s) : s_(s) {
+SocketInterface::Socket::Socket(SOCKET s) : s_(s) {
   Start();
   refCounter_ = new int(1);
 };
 
-Socket::~Socket() {
+SocketInterface::Socket::~Socket() {
   if (! --(*refCounter_)) {
     Close();
     delete refCounter_;
@@ -92,7 +103,7 @@ Socket::~Socket() {
   if (!nofSockets_) End();
 }
 
-Socket::Socket(const Socket& o) {
+SocketInterface::Socket::Socket(const Socket& o) {
   refCounter_=o.refCounter_;
   (*refCounter_)++;
   s_         =o.s_;
@@ -100,7 +111,7 @@ Socket::Socket(const Socket& o) {
   nofSockets_++;
 }
 
-Socket& Socket::operator=(Socket& o) {
+SocketInterface::Socket& SocketInterface::Socket::operator=(Socket& o) {
   (*o.refCounter_)++;
 
   refCounter_=o.refCounter_;
@@ -111,11 +122,11 @@ Socket& Socket::operator=(Socket& o) {
   return *this;
 }
 
-void Socket::Close() {
+void SocketInterface::Socket::Close() {
   closesocket(s_);
 }
 
-std::string Socket::ReceiveBytes() {
+std::string SocketInterface::Socket::ReceiveBytes() {
 	std::string ret;
 	char buf[MAXBUFFER];
 	u_long arg;
@@ -137,7 +148,7 @@ std::string Socket::ReceiveBytes() {
 	return ret;
 }
 
-std::string Socket::ReceiveLine() {
+std::string SocketInterface::Socket::ReceiveLine() {
   std::string ret;
   while (1) {
     char r;
@@ -163,42 +174,50 @@ std::string Socket::ReceiveLine() {
   }
 }
 
-void Socket::SendLine(std::string s) {
+void SocketInterface::Socket::SendLine(std::string s) {
   s += '\n';
   send(s_,s.c_str(),s.length(),0);
 }
 
-void Socket::SendBytes(const std::string& s, int size) {
+void SocketInterface::Socket::SendBytes(const std::string& s, int size) {
   send(s_,s.c_str(),size,0);
 }
 
-SocketServer::SocketServer(int port, int connections, TypeSocket type) {
-  sockaddr_in sa;
+SOCKET SocketInterface::Socket::getSocket() {
+	return s_;
+}
 
+SocketInterface::SocketServer::SocketServer(int port, int connections, TypeSocket type) {
+  Start();
+  sockaddr_in sa;
+  
   memset(&sa, 0, sizeof(sa));
 
   sa.sin_family = PF_INET;             
   sa.sin_port = htons(port);          
+  cout << "A\n";
   s_ = socket(AF_INET, SOCK_STREAM, 0);
+  cout << "B\n";
   if (s_ == INVALID_SOCKET) {
     throw "INVALID_SOCKET";
   }
-
+  cout << "C\n";
   if(type==NonBlockingSocket) {
     u_long arg = 1;
     ioctlsocket(s_, FIONBIO, &arg);
   }
-
+  cout << "D\n";
   /* bind the socket to the internet address */
   if (bind(s_, (sockaddr *)&sa, sizeof(sockaddr_in)) == SOCKET_ERROR) {
     closesocket(s_);
     throw "INVALID_SOCKET";
   }
-  
-  listen(s_, connections);                               
+  cout << "E\n";
+  listen(s_, connections);
+  cout << "F\n";
 }
 
-Socket* SocketServer::Accept() {
+SocketInterface::Socket* SocketInterface::SocketServer::Accept() {
   SOCKET new_sock = accept(s_, 0, 0);
   if (new_sock == INVALID_SOCKET) {
     int rc = WSAGetLastError();
@@ -214,7 +233,7 @@ Socket* SocketServer::Accept() {
   return r;
 }
 
-SocketClient::SocketClient(const std::string &host, int port) : Socket() {
+SocketInterface::SocketClient::SocketClient(const std::string &host, int port) : Socket() {
   std::string error;
 
   hostent *he;
@@ -245,32 +264,4 @@ SocketClient::SocketClient(const std::string &host, int port) : Socket() {
     error = strerror(WSAGetLastError());
     throw error;
   }
-}
-
-SocketSelect::SocketSelect(Socket const * const s1, Socket const * const s2, TypeSocket type) {
-  FD_ZERO(&fds_);
-  FD_SET(const_cast<Socket*>(s1)->s_,&fds_);
-  if(s2) {
-    FD_SET(const_cast<Socket*>(s2)->s_,&fds_);
-  }     
-
-  TIMEVAL tval;
-  tval.tv_sec  = 0;
-  tval.tv_usec = 1;
-
-  TIMEVAL *ptval;
-  if(type==NonBlockingSocket) {
-    ptval = &tval;
-  }
-  else { 
-    ptval = 0;
-  }
-
-  if (select (0, &fds_, (fd_set*) 0, (fd_set*) 0, ptval) == SOCKET_ERROR) 
-    throw "Error in select";
-}
-
-bool SocketSelect::Readable(Socket const* const s) {
-  if (FD_ISSET(s->s_,&fds_)) return true;
-  return false;
 }

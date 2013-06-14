@@ -27,9 +27,17 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
+#ifndef _CRT_SECURE_NO_WARNINGS
+	#define _CRT_SECURE_NO_WARNINGS 1
+#endif
+
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 6000
+#define SERVER_PORT 6001
 #define MAXBUFFER 1000
+
+#ifndef WIN32_LEAN_AND_MEAN
+	#define WIN32_LEAN_AND_MEAN
+#endif
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -38,6 +46,8 @@
 #include <iostream>
 #include <string>
 
+namespace SocketInterface {
+
 enum TypeSocket {BlockingSocket, NonBlockingSocket};
 
 class Socket {
@@ -45,8 +55,7 @@ public:
 
   virtual ~Socket();
   Socket(const Socket&);
-  Socket& operator=(Socket&);
-
+  
   std::string ReceiveLine();
   std::string ReceiveBytes();
 
@@ -61,13 +70,15 @@ public:
   // (in contrast to SendLine).
   void   SendBytes(const std::string&, int size);
 
+  SOCKET getSocket();
+
 protected:
   friend class SocketServer;
   friend class SocketSelect;
 
   Socket(SOCKET s);
   Socket();
-
+  Socket& Socket::operator=(Socket& o);
 
   SOCKET s_;
 
@@ -89,18 +100,8 @@ public:
   SocketServer(int port, int connections, TypeSocket type=BlockingSocket);
 
   Socket* Accept();
-};
-
-// http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winsock/wsapiref_2tiq.asp
-class SocketSelect {
-  public:
-    SocketSelect(Socket const * const s1, Socket const * const s2=NULL, TypeSocket type=BlockingSocket);
-
-    bool Readable(Socket const * const s);
-
-  private:
-    fd_set fds_;
 }; 
 
+}
 
 #endif

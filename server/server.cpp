@@ -23,13 +23,13 @@ int main(int argc, char *argv[])
 	char *inputFileName = "../icarus-server/command.txt";
 			
   	// Create socket
-  	SocketServer in(SERVER_PORT,5);
+  	SocketInterface::SocketServer in(SERVER_PORT,5);
 
 	while (1) {
 	cout << "Waiting on port " << SERVER_PORT << endl;
 	
 	// Wait for the client
-    Socket* client = in.Accept();
+    SocketInterface::Socket* client = in.Accept();
 	
 	// Receiving the file worldData
 	cout << "Receiving the file" << endl;

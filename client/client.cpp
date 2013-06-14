@@ -26,7 +26,7 @@ int main() {
 	char *outputFileName = "../grip-client/command.txt";
 		
 	// Connect to the sever
-    SocketClient server(SERVER_IP, SERVER_PORT);
+    SocketInterface::SocketClient server(SERVER_IP, SERVER_PORT);
 	
 	// Open and Send file
 	inputFile.open(inputFileName, std::ifstream::binary);
