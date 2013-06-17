@@ -23,13 +23,22 @@ int main(int argc, char *argv[])
 	char *inputFileName = "../icarus-server/command.txt";
 			
   	// Create socket
-  	SocketInterface::SocketServer in(SERVER_PORT,5);
+	SocketInterface::SocketServer in(SERVER_PORT,5, SocketInterface::NonBlockingSocket);
 
 	while (1) {
 	cout << "Waiting on port " << SERVER_PORT << endl;
 	
 	// Wait for the client
-    SocketInterface::Socket* client = in.Accept();
+	int connectionResult = WSAEWOULDBLOCK;
+	SocketInterface::Socket* client;
+	while(connectionResult==WSAEWOULDBLOCK)
+	{
+		//std::cout<<"Waiting for incoming connections...\r\n";
+		client = in.Accept();
+		connectionResult=WSAGetLastError();
+	}
+	//system("pause");
+	//SocketInterface::Socket* client = in.Accept();
 	
 	// Receiving the file worldData
 	cout << "Receiving the file" << endl;
@@ -37,12 +46,28 @@ int main(int argc, char *argv[])
 	while (1) {
 		outputBuffer = client->ReceiveBytes();
 		if (_DEBUG_) cout << "Buffer: " << outputBuffer.size() << endl;
-		if (outputBuffer.empty()) {
+		int nError=WSAGetLastError();
+		if(nError!=WSAEWOULDBLOCK&&nError!=0)
+		{
+			cout<<"Winsock error code: "<<nError<<"\r\n";
+			cout<<"Server disconnected!\r\n";
+			// Close our socket entirely
+			client->Close();
+
 			break;
 		}
-		outputFile << outputBuffer;
-		if (outputBuffer.size() < MAXBUFFER) {
-			break;
+		else if (nError==WSAEWOULDBLOCK) {
+			// Do nothing
+			cout << "WSAEWOULDBLOCK" << endl;
+		}
+		else {
+			if (outputBuffer.empty()) {
+				break;
+			}
+			outputFile << outputBuffer;
+			if (outputBuffer.size() < MAXBUFFER) {
+				break;
+			}
 		}
 	}
 	outputFile.flush();
