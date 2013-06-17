@@ -168,9 +168,10 @@ std::string SocketInterface::Socket::ReceiveLine() {
 //      return "";
 //      }
     }
+	cout << ret.size() << endl;
 
-    ret += r;
     if (r == '\n')  return ret;
+	ret += r;
   }
 }
 
@@ -195,26 +196,20 @@ SocketInterface::SocketServer::SocketServer(int port, int connections, TypeSocke
 
   sa.sin_family = PF_INET;             
   sa.sin_port = htons(port);          
-  cout << "A\n";
   s_ = socket(AF_INET, SOCK_STREAM, 0);
-  cout << "B\n";
   if (s_ == INVALID_SOCKET) {
     throw "INVALID_SOCKET";
   }
-  cout << "C\n";
   if(type==NonBlockingSocket) {
     u_long arg = 1;
     ioctlsocket(s_, FIONBIO, &arg);
   }
-  cout << "D\n";
   /* bind the socket to the internet address */
   if (bind(s_, (sockaddr *)&sa, sizeof(sockaddr_in)) == SOCKET_ERROR) {
     closesocket(s_);
     throw "INVALID_SOCKET";
   }
-  cout << "E\n";
   listen(s_, connections);
-  cout << "F\n";
 }
 
 SocketInterface::Socket* SocketInterface::SocketServer::Accept() {

@@ -32,7 +32,7 @@
 #endif
 
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 6001
+#define SERVER_PORT 6003
 #define MAXBUFFER 1000
 
 #ifndef WIN32_LEAN_AND_MEAN
