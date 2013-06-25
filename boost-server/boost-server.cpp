@@ -9,6 +9,7 @@
 //
 
 #define _WIN32_WINNT 0x0501
+#define MAX_BUFFER 128
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -40,12 +41,48 @@ public:
     return state_ == reading;
   }
 
+	// Notify that third party library that it should perform its read line operation.
+	void do_read_line(boost::system::error_code& ec)
+	{
+		boost::array<char, MAX_BUFFER> dataTemp;
+		
+		if (std::size_t len = socket_.read_some(boost::asio::buffer(dataTemp), ec))
+		{
+			/*
+			// = { 'H', '\n' };
+			std::string A1 = data_.data();
+			A1.append(dataTemp.data());
+			int size = A1.size();
+			if (size > MAX_BUFFER)
+			{
+				// ERROR
+			}
+			for (int i=0; i<=size; i++)
+			{
+				data_[i] = A1[i];
+				std::cout << data_[i] << std::endl;
+			}
+			// Concat
+			// 
+			
+			*/
+			data_ = dataTemp;
+			std::cout << len << " | " << "\n";
+			write_buffer_ = boost::asio::buffer(data_, len);
+				
+			if (data_.data()[len-1] == '\n' || data_.data()[len-1] == '\r')
+			{
+				state_ = writing;
+			}
+		}
+	}
+
   // Notify that third party library that it should perform its read operation.
   void do_read(boost::system::error_code& ec)
   {
     if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec))
     {
-      write_buffer_ = boost::asio::buffer(data_, len);
+	  write_buffer_ = boost::asio::buffer(data_, len);
       state_ = writing;
     }
   }
@@ -60,6 +97,7 @@ public:
   // Notify that third party library that it should perform its write operation.
   void do_write(boost::system::error_code& ec)
   {
+	  std::cout << "write\n";
     if (std::size_t len = socket_.write_some(
           boost::asio::buffer(write_buffer_), ec))
     {
@@ -71,7 +109,7 @@ public:
 private:
   tcp::socket& socket_;
   enum { reading, writing } state_;
-  boost::array<char, 128> data_;
+  boost::array<char, MAX_BUFFER> data_;
   boost::asio::const_buffer write_buffer_;
 };
 
@@ -143,7 +181,8 @@ private:
 
     // Notify third party library that it can perform a read.
     if (!ec)
-      session_impl_.do_read(ec);
+      //session_impl_.do_read(ec);
+      session_impl_.do_read_line(ec);
 
     // The third party library successfully performed a read on the socket.
     // Start new read or write operations based on what it now wants.
@@ -221,16 +260,18 @@ int main(int argc, char* argv[])
 {
   try
   {
-    if (argc != 2)
+    /*
+	if (argc != 2)
     {
       std::cerr << "Usage: third_party_lib <port>\n";
       return 1;
     }
+	*/
 
     boost::asio::io_service io_service;
 
     using namespace std; // For atoi.
-    server s(io_service, atoi(argv[1]));
+    server s(io_service, 6003);
 
     io_service.run();
   }
