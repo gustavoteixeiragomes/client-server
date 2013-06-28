@@ -1,284 +1,163 @@
 //
-// third_party_lib.cpp
+// This software is derivated from third_party_lib.cpp at http://www.boost.org/doc/libs/1_53_0/doc/html/boost_asio/example/nonblocking/third_party_lib.cpp
 // ~~~~~~~~~~~~~~~~~~~
-//
-// Copyright (c) 2003-2008 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// 
+// This file: Copyright (c) 2013 Gustavo Gomes (github at guvux dot com dot br)
+// Original file: Copyright (c) 2003-2008 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#define _WIN32_WINNT 0x0501
-#define MAX_BUFFER 128
+#include "boost-server.h"
 
-#include <boost/asio.hpp>
-#include <boost/array.hpp>
-#include <boost/bind.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
-
-using boost::asio::ip::tcp;
-
-namespace third_party_lib {
-
-// Simulation of a third party library that wants to perform read and write
-// operations directly on a socket. It needs to be polled to determine whether
-// it requires a read or write operation, and notified when the socket is ready
-// for reading or writing.
-class session
-{
-public:
-  session(tcp::socket& socket)
-    : socket_(socket),
-      state_(reading)
-  {
-  }
-
-  // Returns true if the third party library wants to be notified when the
-  // socket is ready for reading.
-  bool want_read() const
-  {
-    return state_ == reading;
-  }
-
-	// Notify that third party library that it should perform its read line operation.
-	void do_read_line(boost::system::error_code& ec)
-	{
-		boost::array<char, MAX_BUFFER> dataTemp;
+// Convert a string into an aray of size MAX_BUFFER
+boost::array<char, MAX_BUFFER> boostServer::session::string2array(std::string str) {
+	boost::array<char, MAX_BUFFER> dataTemp;
+	int size = str.size();
 		
-		if (std::size_t len = socket_.read_some(boost::asio::buffer(dataTemp), ec))
-		{
-			/*
-			// = { 'H', '\n' };
-			std::string A1 = data_.data();
-			A1.append(dataTemp.data());
-			int size = A1.size();
-			if (size > MAX_BUFFER)
-			{
-				// ERROR
-			}
-			for (int i=0; i<=size; i++)
-			{
-				data_[i] = A1[i];
-				std::cout << data_[i] << std::endl;
-			}
-			// Concat
-			// 
+	if (size > MAX_BUFFER) {
+		size = MAX_BUFFER; 
+	}
+	for (int i=0; i<size; i++) {
+		dataTemp.c_array()[i] = str[i];
+	}
+	dataTemp.c_array()[size] = '\0';
+	return dataTemp;
+}
 			
-			*/
-			data_ = dataTemp;
-			std::cout << len << " | " << "\n";
-			write_buffer_ = boost::asio::buffer(data_, len);
-				
-			if (data_.data()[len-1] == '\n' || data_.data()[len-1] == '\r')
-			{
-				state_ = writing;
+// Notify that library that it should perform its read line operation.
+void boostServer::session::do_read_line(boost::system::error_code& ec) {
+	if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec)) {
+		// Append to request
+		std::string strTemp = data_.data();
+		request_ += strTemp.substr(0, len);
+			
+		// Verify end of msg
+		if (data_.data()[len-1] == '\n') {
+			// Adjust the request string
+			request_ = request_.substr(0, request_.size()-1);
+			// Call function
+			if (request_ == "getObjects()") {
+				answer_ = "Hello World!";
 			}
+			else {
+				answer_ = "Unknown command";
+			}
+			answer_.append("\n");
+			data_ = string2array(answer_);
+			write_buffer_ = boost::asio::buffer(data_, answer_.size());
+			request_.clear();
+			answer_.clear();
+			state_ = writing;
 		}
 	}
+}
 
-  // Notify that third party library that it should perform its read operation.
-  void do_read(boost::system::error_code& ec)
-  {
-    if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec))
-    {
-	  write_buffer_ = boost::asio::buffer(data_, len);
-      state_ = writing;
-    }
-  }
+// Notify that library that it should perform its read operation.
+void boostServer::session::do_read(boost::system::error_code& ec) {
+	if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec)) {
+		write_buffer_ = boost::asio::buffer(data_, len);
+		state_ = writing;
+	}
+}
 
-  // Returns true if the third party library wants to be notified when the
-  // socket is ready for writing.
-  bool want_write() const
-  {
-    return state_ == writing;
-  }
+// Notify that library that it should perform its write operation.
+void boostServer::session::do_write(boost::system::error_code& ec) {
+	if (std::size_t len = socket_.write_some(boost::asio::buffer(write_buffer_), ec)) {
+		write_buffer_ = write_buffer_ + len;
+		state_ = boost::asio::buffer_size(write_buffer_) > 0 ? writing : reading;
+	}
+}
 
-  // Notify that third party library that it should perform its write operation.
-  void do_write(boost::system::error_code& ec)
-  {
-	  std::cout << "write\n";
-    if (std::size_t len = socket_.write_some(
-          boost::asio::buffer(write_buffer_), ec))
-    {
-      write_buffer_ = write_buffer_ + len;
-      state_ = boost::asio::buffer_size(write_buffer_) > 0 ? writing : reading;
-    }
-  }
+tcp::socket& boostServer::connection::socket() {
+	return socket_;
+}
 
-private:
-  tcp::socket& socket_;
-  enum { reading, writing } state_;
-  boost::array<char, MAX_BUFFER> data_;
-  boost::asio::const_buffer write_buffer_;
-};
+void boostServer::connection::start() {
+	// Put the socket into non-blocking mode.
+	tcp::socket::non_blocking_io non_blocking_io(true);
+	socket_.io_control(non_blocking_io);
 
-} // namespace third_party_lib
+	start_operations();
+}
 
-// The glue between asio's sockets and the third party library.
-class connection
-  : public boost::enable_shared_from_this<connection>
-{
-public:
-  typedef boost::shared_ptr<connection> pointer;
+void boostServer::connection::start_operations() {
+	// Start a read operation if the library wants one.
+	if (session_impl_.want_read() && !read_in_progress_) {
+		read_in_progress_ = true;
+		socket_.async_read_some(
+			boost::asio::null_buffers(),
+			boost::bind(&connection::handle_read,
+			shared_from_this(),
+			boost::asio::placeholders::error));
+	}
 
-  static pointer create(boost::asio::io_service& io_service)
-  {
-    return pointer(new connection(io_service));
-  }
+	// Start a write operation if the library wants one.
+	if (session_impl_.want_write() && !write_in_progress_) {
+		write_in_progress_ = true;
+		socket_.async_write_some(
+			boost::asio::null_buffers(),
+			boost::bind(&connection::handle_write,
+			shared_from_this(),
+			boost::asio::placeholders::error));
+	}
+}
 
-  tcp::socket& socket()
-  {
-    return socket_;
-  }
+void boostServer::connection::handle_read(boost::system::error_code ec) {
+	read_in_progress_ = false;
 
-  void start()
-  {
-    // Put the socket into non-blocking mode.
-    tcp::socket::non_blocking_io non_blocking_io(true);
-    socket_.io_control(non_blocking_io);
+	// Notify library that it can perform a read.
+	if (!ec) {
+		session_impl_.do_read_line(ec);
+	}
 
-    start_operations();
-  }
+	// The library successfully performed a read on the socket.
+	// Start new read or write operations based on what it now wants.
+	if (!ec || ec == boost::asio::error::would_block) {
+		start_operations();
+	}
 
-private:
-  connection(boost::asio::io_service& io_service)
-    : socket_(io_service),
-      session_impl_(socket_),
-      read_in_progress_(false),
-      write_in_progress_(false)
-  {
-  }
+	// Otherwise, an error occurred. Closing the socket cancels any outstanding
+	// asynchronous read or write operations. The connection object will be
+	// destroyed automatically once those outstanding operations complete.
+	else {
+		socket_.close();
+	}
+}
 
-  void start_operations()
-  {
-    // Start a read operation if the third party library wants one.
-    if (session_impl_.want_read() && !read_in_progress_)
-    {
-      read_in_progress_ = true;
-      socket_.async_read_some(
-          boost::asio::null_buffers(),
-          boost::bind(&connection::handle_read,
-            shared_from_this(),
-            boost::asio::placeholders::error));
-    }
+void boostServer::connection::handle_write(boost::system::error_code ec) {
+	write_in_progress_ = false;
 
-    // Start a write operation if the third party library wants one.
-    if (session_impl_.want_write() && !write_in_progress_)
-    {
-      write_in_progress_ = true;
-      socket_.async_write_some(
-          boost::asio::null_buffers(),
-          boost::bind(&connection::handle_write,
-            shared_from_this(),
-            boost::asio::placeholders::error));
-    }
-  }
+	// Notify library that it can perform a write.
+	if (!ec) {
+		session_impl_.do_write(ec);
+	}
 
-  void handle_read(boost::system::error_code ec)
-  {
-    read_in_progress_ = false;
+	// The library successfully performed a write on the socket.
+	// Start new read or write operations based on what it now wants.
+	if (!ec || ec == boost::asio::error::would_block) {
+		start_operations();
+	}
 
-    // Notify third party library that it can perform a read.
-    if (!ec)
-      //session_impl_.do_read(ec);
-      session_impl_.do_read_line(ec);
+	// Otherwise, an error occurred. Closing the socket cancels any outstanding
+	// asynchronous read or write operations. The connection object will be
+	// destroyed automatically once those outstanding operations complete.
+	else {
+		socket_.close();
+	}
+}
 
-    // The third party library successfully performed a read on the socket.
-    // Start new read or write operations based on what it now wants.
-    if (!ec || ec == boost::asio::error::would_block)
-      start_operations();
+void boostServer::server::start_accept() {
+	connection::pointer new_connection = connection::create(acceptor_.get_io_service());
 
-    // Otherwise, an error occurred. Closing the socket cancels any outstanding
-    // asynchronous read or write operations. The connection object will be
-    // destroyed automatically once those outstanding operations complete.
-    else
-      socket_.close();
-  }
+	acceptor_.async_accept(new_connection->socket(), boost::bind(&server::handle_accept, this, new_connection, boost::asio::placeholders::error));
+}
 
-  void handle_write(boost::system::error_code ec)
-  {
-    write_in_progress_ = false;
-
-    // Notify third party library that it can perform a write.
-    if (!ec)
-      session_impl_.do_write(ec);
-
-    // The third party library successfully performed a write on the socket.
-    // Start new read or write operations based on what it now wants.
-    if (!ec || ec == boost::asio::error::would_block)
-      start_operations();
-
-    // Otherwise, an error occurred. Closing the socket cancels any outstanding
-    // asynchronous read or write operations. The connection object will be
-    // destroyed automatically once those outstanding operations complete.
-    else
-      socket_.close();
-  }
-
-private:
-  tcp::socket socket_;
-  third_party_lib::session session_impl_;
-  bool read_in_progress_;
-  bool write_in_progress_;
-};
-
-class server
-{
-public:
-  server(boost::asio::io_service& io_service, unsigned short port)
-    : acceptor_(io_service, tcp::endpoint(tcp::v4(), port))
-  {
-    start_accept();
-  }
-
-private:
-  void start_accept()
-  {
-    connection::pointer new_connection =
-      connection::create(acceptor_.get_io_service());
-
-    acceptor_.async_accept(new_connection->socket(),
-        boost::bind(&server::handle_accept, this, new_connection,
-          boost::asio::placeholders::error));
-  }
-
-  void handle_accept(connection::pointer new_connection,
-      const boost::system::error_code& error)
-  {
-    if (!error)
-    {
-      new_connection->start();
-      start_accept();
-    }
-  }
-
-  tcp::acceptor acceptor_;
-};
-
-int main(int argc, char* argv[])
-{
-  try
-  {
-    /*
-	if (argc != 2)
-    {
-      std::cerr << "Usage: third_party_lib <port>\n";
-      return 1;
-    }
-	*/
-
-    boost::asio::io_service io_service;
-
-    using namespace std; // For atoi.
-    server s(io_service, 6003);
-
-    io_service.run();
-  }
-  catch (std::exception& e)
-  {
-    std::cerr << "Exception: " << e.what() << "\n";
-  }
-
-  return 0;
+void boostServer::server::handle_accept(connection::pointer new_connection,
+    const boost::system::error_code& error) {
+	if (!error) {
+		new_connection->start();
+		start_accept();
+	}
 }
