@@ -9,7 +9,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#include "boost-server.h"
+#include "BoostServer.h"
 
 int main(int argc, char* argv[])
 {
@@ -17,19 +17,11 @@ int main(int argc, char* argv[])
   {
     // Initialize
 	boost::asio::io_service io_service;
-    boostServer::server s(io_service, SERVER_PORT);
+    BoostServer::server s(io_service, SERVER_PORT);
 
     // Start server
 	boost::thread t(boost::bind(&boost::asio::io_service::run, &io_service));
-	boost::this_thread::sleep(boost::posix_time::seconds(5));
-	std::cout << "load\n";
-
-	// Close server
-	// boost::this_thread::interruption_point();
-	// t.interrupt();
-	std::cout << "interrupt\n";
 	t.join();
-	std::cout << "close\n";
   }
   catch (std::exception& e)
   {

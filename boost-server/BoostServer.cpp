@@ -9,10 +9,10 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#include "boost-server.h"
+#include "BoostServer.h"
 
 // Convert a string into an aray of size MAX_BUFFER
-boost::array<char, MAX_BUFFER> boostServer::session::string2array(std::string str) {
+boost::array<char, MAX_BUFFER> BoostServer::session::string2array(std::string str) {
 	boost::array<char, MAX_BUFFER> dataTemp;
 	int size = str.size();
 		
@@ -27,35 +27,37 @@ boost::array<char, MAX_BUFFER> boostServer::session::string2array(std::string st
 }
 			
 // Notify that library that it should perform its read line operation.
-void boostServer::session::do_read_line(boost::system::error_code& ec) {
+void BoostServer::session::do_read_line(boost::system::error_code& ec) {
 	if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec)) {
 		// Append to request
 		std::string strTemp = data_.data();
-		request_ += strTemp.substr(0, len);
+		std::string request = handle_.getRequest();
+		request += strTemp.substr(0, len);
+		handle_.setRequest(request);
 			
 		// Verify end of msg
 		if (data_.data()[len-1] == '\n') {
 			// Adjust the request string
-			request_ = request_.substr(0, request_.size()-1);
-			// Call function
-			if (request_ == "getObjects()") {
-				answer_ = "Hello World!";
-			}
-			else {
-				answer_ = "Unknown command";
-			}
-			answer_.append("\n");
-			data_ = string2array(answer_);
-			write_buffer_ = boost::asio::buffer(data_, answer_.size());
-			request_.clear();
-			answer_.clear();
+			request = request.substr(0, request.size()-1);
+			handle_.setRequest(request);
+			
+			// Call function to handle with the request
+			handle_.execute();
+
+			// Adjust the answer string
+			std::string answer = handle_.getAnswer();
+			answer.append("\n");
+
+			data_ = string2array(answer);
+			write_buffer_ = boost::asio::buffer(data_, answer.size());
+			handle_.clear();
 			state_ = writing;
 		}
 	}
 }
 
 // Notify that library that it should perform its read operation.
-void boostServer::session::do_read(boost::system::error_code& ec) {
+void BoostServer::session::do_read(boost::system::error_code& ec) {
 	if (std::size_t len = socket_.read_some(boost::asio::buffer(data_), ec)) {
 		write_buffer_ = boost::asio::buffer(data_, len);
 		state_ = writing;
@@ -63,18 +65,18 @@ void boostServer::session::do_read(boost::system::error_code& ec) {
 }
 
 // Notify that library that it should perform its write operation.
-void boostServer::session::do_write(boost::system::error_code& ec) {
+void BoostServer::session::do_write(boost::system::error_code& ec) {
 	if (std::size_t len = socket_.write_some(boost::asio::buffer(write_buffer_), ec)) {
 		write_buffer_ = write_buffer_ + len;
 		state_ = boost::asio::buffer_size(write_buffer_) > 0 ? writing : reading;
 	}
 }
 
-tcp::socket& boostServer::connection::socket() {
+tcp::socket& BoostServer::connection::socket() {
 	return socket_;
 }
 
-void boostServer::connection::start() {
+void BoostServer::connection::start() {
 	// Put the socket into non-blocking mode.
 	tcp::socket::non_blocking_io non_blocking_io(true);
 	socket_.io_control(non_blocking_io);
@@ -82,7 +84,7 @@ void boostServer::connection::start() {
 	start_operations();
 }
 
-void boostServer::connection::start_operations() {
+void BoostServer::connection::start_operations() {
 	// Start a read operation if the library wants one.
 	if (session_impl_.want_read() && !read_in_progress_) {
 		read_in_progress_ = true;
@@ -104,7 +106,7 @@ void boostServer::connection::start_operations() {
 	}
 }
 
-void boostServer::connection::handle_read(boost::system::error_code ec) {
+void BoostServer::connection::handle_read(boost::system::error_code ec) {
 	read_in_progress_ = false;
 
 	// Notify library that it can perform a read.
@@ -126,7 +128,7 @@ void boostServer::connection::handle_read(boost::system::error_code ec) {
 	}
 }
 
-void boostServer::connection::handle_write(boost::system::error_code ec) {
+void BoostServer::connection::handle_write(boost::system::error_code ec) {
 	write_in_progress_ = false;
 
 	// Notify library that it can perform a write.
@@ -148,13 +150,13 @@ void boostServer::connection::handle_write(boost::system::error_code ec) {
 	}
 }
 
-void boostServer::server::start_accept() {
+void BoostServer::server::start_accept() {
 	connection::pointer new_connection = connection::create(acceptor_.get_io_service());
 
 	acceptor_.async_accept(new_connection->socket(), boost::bind(&server::handle_accept, this, new_connection, boost::asio::placeholders::error));
 }
 
-void boostServer::server::handle_accept(connection::pointer new_connection,
+void BoostServer::server::handle_accept(connection::pointer new_connection,
     const boost::system::error_code& error) {
 	if (!error) {
 		new_connection->start();

@@ -9,6 +9,9 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
+#ifndef __BOOST_SERVER__
+	#define __BOOST_SERVER__
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
 	#define _WIN32_WINNT 0x0501
 #endif
@@ -23,9 +26,11 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 
+#include "HandleInterface.h"
+
 using boost::asio::ip::tcp;
 
-namespace boostServer {
+namespace BoostServer {
 
 	// Implementation of a library that wants to perform read and write
 	// operations directly on a socket. It needs to be polled to determine whether
@@ -64,8 +69,7 @@ namespace boostServer {
 		enum { reading, writing } state_;
 		boost::array<char, MAX_BUFFER> data_;
 		boost::asio::const_buffer write_buffer_;
-		std::string request_;
-		std::string answer_;
+		handleInterface::Handle handle_;
 	};
 
 	// The glue between asio's sockets and the boost-server library.
@@ -110,4 +114,6 @@ namespace boostServer {
 			tcp::acceptor acceptor_;
 	};
 
-} // namespace boostServer
+} // namespace BoostServer
+
+#endif
